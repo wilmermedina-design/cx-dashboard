@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CX Performance — Team & Goal Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0A0F1C;
+    --panel: #10182B;
+    --panel-alt: #0D1424;
+    --border: rgba(148, 163, 196, 0.14);
+    --border-strong: rgba(148, 163, 196, 0.26);
+    --text: #E9EDF7;
+    --text-dim: #93A0C0;
+    --text-faint: #5C6788;
+    --good: #34D399;
+    --good-dim: rgba(52, 211, 153, 0.14);
+    --bad: #F87171;
+    --bad-dim: rgba(248, 113, 113, 0.14);
+    --warn: #FBBF24;
+    --warn-dim: rgba(251, 191, 36, 0.14);
+    --tier2: #60A5FA;
+    --tier2-dim: rgba(96, 165, 250, 0.14);
+    --tier3: #C084FC;
+    --tier3-dim: rgba(192, 132, 252, 0.14);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-body); padding: 32px 24px 80px; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header.top {
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+    flex-wrap: wrap; padding-bottom: 24px; border-bottom: 1px solid var(--border); margin-bottom: 32px;
+  }
+  .brandline { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 4px var(--good-dim); }
+  .brandline span { font-size: 13px; color: var(--text-dim); letter-spacing: 0.02em; }
+  h1 { font-family: var(--font-display); font-size: 28px; margin: 0; line-height: 1.15; }
+  .subtitle { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
+  .goal-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--border-strong); border-radius: 999px; padding: 6px 12px; font-size: 12px; color: var(--text-dim); background: var(--panel-alt); }
+  .chip b { color: var(--text); }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 36px; }
+  .summary-cell { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; }
+  .summary-cell .num { font-family: var(--font-display); font-size: 32px; font-weight: 700; line-height: 1; }
+  .summary-cell .lbl { color: var(--text-dim); font-size: 12.5px; margin-top: 8px; }
+  .summary-cell.flagged .num { color: var(--bad); }
+
+  .section { margin-bottom: 40px; }
+  .section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  .section-head h2 { font-family: var(--font-display); font-size: 19px; margin: 0; }
+  .section-head p { color: var(--text-dim); font-size: 13px; margin: 0; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tab-btn {
+    font-family: var(--font-body); font-size: 13px; font-weight: 600; padding: 8px 16px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel-alt);
+    color: var(--text-dim); cursor: pointer; transition: all .15s ease;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active[data-tier="Tier 2"] { color: var(--tier2); border-color: var(--tier2); background: var(--tier2-dim); }
+  .tab-btn.active[data-tier="Tier 3"] { color: var(--tier3); border-color: var(--tier3); background: var(--tier3-dim); }
+
+  .tier-panel { display: none; }
+  .tier-panel.active { display: block; }
+
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px 18px 10px; }
+  .chart-card h3 { font-size: 13px; font-weight: 600; color: var(--text-dim); margin: 0 0 4px; }
+  .chart-card .note { font-size: 11px; color: var(--text-faint); margin-bottom: 8px; }
+  .chart-wrap { position: relative; height: 200px; }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; background: var(--panel); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  .search-input {
+    background: var(--panel-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); padding: 8px 14px; font-size: 13px; flex: 1; min-width: 180px;
+  }
+  .select-input {
+    background: var(--panel-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); padding: 8px 12px; font-size: 13px; cursor: pointer;
+  }
+  .clear-btn {
+    background: var(--bad-dim); color: var(--bad); border: 1px solid var(--bad);
+    padding: 8px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .clear-btn:hover { background: var(--bad); color: #000; }
+
+  .streak-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .streak-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; overflow: hidden; }
+  .streak-header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+  .streak-header:hover { background: var(--panel-alt); }
+  .streak-left { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; }
+  .streak-count { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--bad); }
+  .streak-dropdown { display: none; padding: 14px 16px; border-top: 1px solid var(--border); background: var(--panel-alt); }
+  .streak-dropdown.open { display: block; }
+  
+  .weekly-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+  .week-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  .week-box .w-lbl { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+  .week-box .w-val { font-size: 12px; font-weight: 700; margin-top: 4px; }
+  .val-pass { color: var(--good); }
+  .val-fail { color: var(--bad); background: var(--bad-dim); padding: 2px 4px; border-radius: 4px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--text-dim); font-size: 11.5px; text-transform: uppercase; font-weight: 600; }
+  .table-scroll { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md); overflow-x: auto; }
+  .tier-tag { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+  .t2 { color: var(--tier2); background: var(--tier2-dim); }
+  .t3 { color: var(--tier3); background: var(--tier3-dim); }
+  .lead-tag { font-size: 11px; color: var(--text-dim); font-weight: 500; }
+  .pill-miss { color: var(--bad); background: var(--bad-dim); padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 12px; }
+  .pill-hit { color: var(--good); background: var(--good-dim); padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 12px; }
+
+  footer { text-align: center; color: var(--text-faint); font-size: 12px; margin-top: 40px; }
+
+  @media (max-width: 768px) {
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+    .chart-grid, .streak-groups { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <div class="brandline"><span class="pulse-dot"></span><span>CX OPERATIONS · TEAM ROSTER DASHBOARD</span></div>
+      <h1>Goal Tracker — CSAT &amp; Solves/Hora</h1>
+      <div class="subtitle">Evaluación por Equipos, Rangos de Fecha y Metas por Tier</div>
+    </div>
+    <div class="goal-chips">
+      <div class="chip">Meta CSAT: <b>≥ 90%</b></div>
+      <div class="chip">Meta SPH Tier 2: <b>≥ 2.00</b></div>
+      <div class="chip">Meta SPH Tier 3: <b>≥ 1.50</b></div>
+    </div>
+  </header>
+
+  <!-- Summary KPI Cards -->
+  <div class="summary-grid">
+    <div class="summary-cell"><div class="num" id="kpiTotal">37</div><div class="lbl">Agentes Filtrados</div></div>
+    <div class="summary-cell flagged"><div class="num" id="kpiOOP">22</div><div class="lbl">Fuera de Al Menos Una Meta</div></div>
+    <div class="summary-cell flagged"><div class="num" id="kpiCSAT">14</div><div class="lbl">Por debajo de CSAT (&lt; 90%)</div></div>
+    <div class="summary-cell flagged"><div class="num" id="kpiSPH">16</div><div class="lbl">Por debajo de Solves/Hr</div></div>
+  </div>
+
+  <!-- Weekly Trend Charts -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Tendencia semanal por Tier</h2>
+      <p>Promedio semanal general de agentes activos · W35 → W38</p>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tier="Tier 2">Tier 2</button>
+      <button class="tab-btn" data-tier="Tier 3">Tier 3</button>
+    </div>
+
+    <div id="panel-Tier2" class="tier-panel active">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>CSAT % — Tier 2</h3>
+          <div class="note">Línea punteada = meta 90%</div>
+          <div class="chart-wrap"><canvas id="chart-csat-T2"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Solves/Hora — Tier 2</h3>
+          <div class="note">Línea punteada = meta 2.00</div>
+          <div class="chart-wrap"><canvas id="chart-sph-T2"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="panel-Tier3" class="tier-panel">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>CSAT % — Tier 3</h3>
+          <div class="note">Línea punteada = meta 90%</div>
+          <div class="chart-wrap"><canvas id="chart-csat-T3"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Solves/Hora — Tier 3</h3>
+          <div class="note">Línea punteada = meta 1.50</div>
+          <div class="chart-wrap"><canvas id="chart-sph-T3"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dropdown Streaks -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Incumplimiento sostenido (2+ semanas consecutivas)</h2>
+      <p>Haz clic en cualquier agente para ver o colapsar su historial W35–W38.</p>
+    </div>
+    <div class="streak-groups">
+      <div>
+        <h3 style="font-size:15px; margin-bottom:12px;">CSAT &lt; 90% Sostenido</h3>
+        <div id="csatDropdownList"></div>
+      </div>
+      <div>
+        <h3 style="font-size:15px; margin-bottom:12px;">Solves/Hora Sostenido</h3>
+        <div id="sphDropdownList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Table with Advanced Filters -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Desempeño individual de agentes (Todos los Agentes)</h2>
+      <p id="tableCountText">Mostrando agentes filtrados</p>
+    </div>
+
+    <!-- Filter Toolbar -->
+    <div class="toolbar">
+      <input type="text" id="searchInput" class="search-input" placeholder="Buscar agente por nombre...">
+      
+      <select id="teamLeadSelect" class="select-input">
+        <option value="ALL">Todos los Equipos (Team Leads)</option>
+        <option value="Adonay Medina">Adonay Medina (10 Agentes)</option>
+        <option value="Oscar Lagos">Oscar Lagos (9 Agentes)</option>
+        <option value="Mario Sibrian">Mario Sibrian (9 Agentes)</option>
+        <option value="Kevin Flores">Kevin Flores (9 Agentes)</option>
+      </select>
+
+      <select id="periodSelect" class="select-input">
+        <option value="L30">Rango: Últimos 30 días</option>
+        <option value="W35">Semana 35 (W35)</option>
+        <option value="W36">Semana 36 (W36)</option>
+        <option value="W37">Semana 37 (W37)</option>
+        <option value="W38">Semana 38 (W38)</option>
+      </select>
+
+      <select id="tierSelect" class="select-input">
+        <option value="ALL">Todos los Tiers</option>
+        <option value="Tier 2">Tier 2</option>
+        <option value="Tier 3">Tier 3</option>
+      </select>
+
+      <select id="csatSelect" class="select-input">
+        <option value="ALL">CSAT: Todos</option>
+        <option value="PASS">CSAT: Cumple (≥ 90%)</option>
+        <option value="FAIL">CSAT: Bajo meta (&lt; 90%)</option>
+      </select>
+
+      <select id="sphSelect" class="select-input">
+        <option value="ALL">Solves/Hr: Todos</option>
+        <option value="PASS">Solves/Hr: Cumple</option>
+        <option value="FAIL">Solves/Hr: Bajo meta</option>
+      </select>
+
+      <button id="clearBtn" class="clear-btn">Limpiar Filtros</button>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Agente</th>
+            <th>Team Lead</th>
+            <th>Tier</th>
+            <th>CSAT %</th>
+            <th>Estado CSAT</th>
+            <th>Solves/Hr</th>
+            <th>Estado Solves/Hr</th>
+            <th>Tickets Resueltos</th>
+          </tr>
+        </thead>
+        <tbody id="agentTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>Fuente: Agent_performance_August_Sept.xlsx · Roster Mapeado</footer>
+</div>
+
+<script>
+// Base de Datos de Agentes Mapeada con el Roster Exacto
+const DATA = {
+  trend: {
+    weeks: ["W35", "W36", "W37", "W38"],
+    t2: { csat: [88.6, 85.9, 95.8, 87.4], sph: [1.866, 1.837, 1.728, 1.886] },
+    t3: { csat: [91.7, 93.8, 93.5, 87.7], sph: [1.643, 1.486, 1.377, 1.506] }
+  },
+  agents: [
+    // ADONAY MEDINA (10 Agentes)
+    {agent: "Alejandro Herrera", lead: "Adonay Medina", tier: "Tier 2", L30: {csat: 76.5, sph: 1.420, solved: 208}, W35: {csat: 100.0, sph: 0.98, solved: 36}, W36: {csat: 60.0, sph: 1.43, solved: 53}, W37: {csat: 100.0, sph: 1.64, solved: 59}, W38: {csat: 50.0, sph: 1.65, solved: 60}},
+    {agent: "Claudia", lead: "Adonay Medina", tier: "Tier 3", L30: {csat: 93.3, sph: 0.969, solved: 132}, W35: {csat: 100.0, sph: 1.31, solved: 48}, W36: {csat: 100.0, sph: 0.67, solved: 24}, W37: {csat: 0.0, sph: 0.83, solved: 28}, W38: {csat: 80.0, sph: 0.89, solved: 32}},
+    {agent: "Heimy", lead: "Adonay Medina", tier: "Tier 3", L30: {csat: 93.8, sph: 1.925, solved: 243}, W35: {csat: 75.0, sph: 1.84, solved: 52}, W36: {csat: 100.0, sph: 1.90, solved: 62}, W37: {csat: 100.0, sph: 1.77, solved: 58}, W38: {csat: 100.0, sph: 2.11, solved: 71}},
+    {agent: "Jean Palacios", lead: "Adonay Medina", tier: "Tier 3", L30: {csat: 95.5, sph: 1.457, solved: 180}, W35: {csat: 100.0, sph: 2.07, solved: 68}, W36: {csat: 100.0, sph: 1.51, solved: 52}, W37: {csat: 87.5, sph: 1.09, solved: 34}, W38: {csat: 100.0, sph: 0.90, solved: 26}},
+    {agent: "Maria L", lead: "Adonay Medina", tier: "Tier 3", L30: {csat: 95.2, sph: 2.034, solved: 299}, W35: {csat: 91.7, sph: 2.00, solved: 70}, W36: {csat: 100.0, sph: 2.12, solved: 78}, W37: {csat: 88.9, sph: 1.70, solved: 62}, W38: {csat: 100.0, sph: 2.22, solved: 89}},
+    {agent: "Maria R.", lead: "Adonay Medina", tier: "Tier 3", L30: {csat: 96.0, sph: 1.760, solved: 235}, W35: {csat: 100.0, sph: 1.86, solved: 64}, W36: {csat: 90.0, sph: 1.85, solved: 64}, W37: {csat: 100.0, sph: 1.65, solved: 53}, W38: {csat: 100.0, sph: 1.76, solved: 54}},
+    {agent: "Mitch M.", lead: "Adonay Medina", tier: "Tier 2", L30: {csat: 84.2, sph: 1.724, solved: 234}, W35: {csat: 85.7, sph: 1.93, solved: 70}, W36: {csat: 66.7, sph: 1.46, solved: 52}, W37: {csat: 100.0, sph: 1.85, solved: 62}, W38: {csat: 66.7, sph: 1.78, solved: 50}},
+    {agent: "Sebastian", lead: "Adonay Medina", tier: "Tier 2", L30: {csat: 83.3, sph: 0.968, solved: 53}, W35: {csat: 0.0, sph: 0.0, solved: 0}, W36: {csat: 0.0, sph: 0.0, solved: 0}, W37: {csat: 100.0, sph: 1.11, solved: 28}, W38: {csat: 100.0, sph: 0.69, solved: 25}},
+    {agent: "Victor Serrano", lead: "Adonay Medina", tier: "Tier 2", L30: {csat: 87.0, sph: 2.051, solved: 317}, W35: {csat: 71.4, sph: 2.08, solved: 74}, W36: {csat: 75.0, sph: 1.96, solved: 70}, W37: {csat: 100.0, sph: 1.95, solved: 70}, W38: {csat: 100.0, sph: 2.27, solved: 80}},
+    {agent: "Yahir Rodríguez", lead: "Adonay Medina", tier: "Tier 2", L30: {csat: 93.3, sph: 1.728, solved: 244}, W35: {csat: 100.0, sph: 1.49, solved: 53}, W36: {csat: 100.0, sph: 1.68, solved: 57}, W37: {csat: 81.8, sph: 1.96, solved: 64}, W38: {csat: 100.0, sph: 2.15, solved: 70}},
+
+    // OSCAR LAGOS (9 Agentes)
+    {agent: "Alejandra", lead: "Oscar Lagos", tier: "Tier 3", L30: {csat: 86.7, sph: 1.519, solved: 204}, W35: {csat: 90.0, sph: 2.01, solved: 72}, W36: {csat: 85.7, sph: 1.00, solved: 35}, W37: {csat: 100.0, sph: 1.56, solved: 51}, W38: {csat: 50.0, sph: 1.40, solved: 46}},
+    {agent: "Dayanna A", lead: "Oscar Lagos", tier: "Tier 3", L30: {csat: 97.1, sph: 1.689, solved: 241}, W35: {csat: 83.3, sph: 1.52, solved: 52}, W36: {csat: 100.0, sph: 1.29, solved: 41}, W37: {csat: 100.0, sph: 1.43, solved: 48}, W38: {csat: 100.0, sph: 2.42, solved: 100}},
+    {agent: "Delmy Romero", lead: "Oscar Lagos", tier: "Tier 2", L30: {csat: 88.5, sph: 2.572, solved: 384}, W35: {csat: 100.0, sph: 2.40, solved: 86}, W36: {csat: 100.0, sph: 3.40, solved: 119}, W37: {csat: 85.7, sph: 2.32, solved: 83}, W38: {csat: 60.0, sph: 2.05, solved: 96}},
+    {agent: "Francisco Zutter", lead: "Oscar Lagos", tier: "Tier 2", L30: {csat: 92.6, sph: 2.015, solved: 281}, W35: {csat: 100.0, sph: 2.05, solved: 74}, W36: {csat: 87.5, sph: 2.01, solved: 69}, W37: {csat: 100.0, sph: 1.81, solved: 64}, W38: {csat: 80.0, sph: 1.95, solved: 74}},
+    {agent: "Gustavo Villanueva", lead: "Oscar Lagos", tier: "Tier 2", L30: {csat: 82.5, sph: 2.301, solved: 353}, W35: {csat: 73.3, sph: 2.22, solved: 83}, W36: {csat: 100.0, sph: 2.45, solved: 90}, W37: {csat: 100.0, sph: 2.12, solved: 77}, W38: {csat: 60.0, sph: 2.51, solved: 103}},
+    {agent: "Jesie Rivera", lead: "Oscar Lagos", tier: "Tier 2", L30: {csat: 85.2, sph: 1.729, solved: 236}, W35: {csat: 62.5, sph: 1.78, solved: 64}, W36: {csat: 100.0, sph: 1.90, solved: 68}, W37: {csat: 66.7, sph: 1.62, solved: 58}, W38: {csat: 100.0, sph: 1.63, solved: 46}},
+    {agent: "Munich Auguis", lead: "Oscar Lagos", tier: "Tier 2", L30: {csat: 100.0, sph: 1.861, solved: 137}, W35: {csat: 0.0, sph: 0.0, solved: 0}, W36: {csat: 0.0, sph: 0.0, solved: 0}, W37: {csat: 100.0, sph: 1.87, solved: 67}, W38: {csat: 100.0, sph: 1.88, solved: 70}},
+    {agent: "Nicolle", lead: "Oscar Lagos", tier: "Tier 2", L30: {csat: 90.5, sph: 1.662, solved: 251}, W35: {csat: 85.7, sph: 2.06, solved: 74}, W36: {csat: 100.0, sph: 1.43, solved: 51}, W37: {csat: 100.0, sph: 1.58, solved: 57}, W38: {csat: 85.7, sph: 1.64, solved: 69}},
+    {agent: "Sergio P", lead: "Oscar Lagos", tier: "Tier 3", L30: {csat: 88.5, sph: 1.792, solved: 257}, W35: {csat: 100.0, sph: 2.09, solved: 75}, W36: {csat: 100.0, sph: 1.93, solved: 69}, W37: {csat: 80.0, sph: 1.66, solved: 60}, W38: {csat: 50.0, sph: 1.47, solved: 53}},
+
+    // MARIO SIBRIAN (9 Agentes)
+    {agent: "Adriana", lead: "Mario Sibrian", tier: "Tier 3", L30: {csat: 84.2, sph: 1.310, solved: 209}, W35: {csat: 83.3, sph: 1.73, solved: 55}, W36: {csat: 71.4, sph: 1.40, solved: 48}, W37: {csat: 100.0, sph: 1.03, solved: 42}, W38: {csat: 100.0, sph: 1.16, solved: 46}},
+    {agent: "Angie Espinoza", lead: "Mario Sibrian", tier: "Tier 2", L30: {csat: 92.0, sph: 1.669, solved: 238}, W35: {csat: 80.0, sph: 1.75, solved: 63}, W36: {csat: 85.7, sph: 1.85, solved: 66}, W37: {csat: 100.0, sph: 1.79, solved: 64}, W38: {csat: 100.0, sph: 1.49, solved: 45}},
+    {agent: "Edison", lead: "Mario Sibrian", tier: "Tier 3", L30: {csat: 90.9, sph: 1.219, solved: 158}, W35: {csat: 80.0, sph: 1.10, solved: 39}, W36: {csat: 100.0, sph: 1.23, solved: 44}, W37: {csat: 100.0, sph: 1.11, solved: 32}, W38: {csat: 85.7, sph: 1.38, solved: 43}},
+    {agent: "Kelvin Aguirre", lead: "Mario Sibrian", tier: "Tier 2", L30: {csat: 89.3, sph: 2.120, solved: 337}, W35: {csat: 85.7, sph: 2.29, solved: 86}, W36: {csat: 100.0, sph: 2.03, solved: 75}, W37: {csat: 85.7, sph: 2.01, solved: 76}, W38: {csat: 85.7, sph: 2.18, solved: 83}},
+    {agent: "Lari F", lead: "Mario Sibrian", tier: "Tier 2", L30: {csat: 85.7, sph: 1.985, solved: 268}, W35: {csat: 88.9, sph: 2.09, solved: 76}, W36: {csat: 71.4, sph: 1.77, solved: 61}, W37: {csat: 100.0, sph: 1.41, solved: 51}, W38: {csat: 87.5, sph: 2.73, solved: 80}},
+    {agent: "Leonardo", lead: "Mario Sibrian", tier: "Tier 3", L30: {csat: 100.0, sph: 1.282, solved: 171}, W35: {csat: 100.0, sph: 1.28, solved: 46}, W36: {csat: 100.0, sph: 1.45, solved: 52}, W37: {csat: 100.0, sph: 1.24, solved: 44}, W38: {csat: 100.0, sph: 1.04, solved: 29}},
+    {agent: "María Tercero", lead: "Mario Sibrian", tier: "Tier 3", L30: {csat: 84.2, sph: 1.438, solved: 143}, W35: {csat: 100.0, sph: 1.85, solved: 48}, W36: {csat: 50.0, sph: 1.55, solved: 34}, W37: {csat: 83.3, sph: 1.08, solved: 26}, W38: {csat: 100.0, sph: 1.22, solved: 35}},
+    {agent: "Ronald Navarro", lead: "Mario Sibrian", tier: "Tier 3", L30: {csat: 90.0, sph: 1.422, solved: 200}, W35: {csat: 71.4, sph: 1.50, solved: 54}, W36: {csat: 100.0, sph: 1.57, solved: 56}, W37: {csat: 100.0, sph: 1.18, solved: 42}, W38: {csat: 80.0, sph: 1.40, solved: 48}},
+    {agent: "Taty", lead: "Mario Sibrian", tier: "Tier 2", L30: {csat: 96.8, sph: 2.038, solved: 283}, W35: {csat: 90.0, sph: 2.09, solved: 76}, W36: {csat: 100.0, sph: 1.87, solved: 63}, W37: {csat: 100.0, sph: 2.03, solved: 71}, W38: {csat: 100.0, sph: 2.33, solved: 73}},
+
+    // KEVIN FLORES (9 Agentes)
+    {agent: "Bryan Kury", lead: "Kevin Flores", tier: "Tier 2", L30: {csat: 97.4, sph: 1.893, solved: 238}, W35: {csat: 100.0, sph: 2.29, solved: 79}, W36: {csat: 100.0, sph: 2.04, solved: 68}, W37: {csat: 100.0, sph: 1.44, solved: 44}, W38: {csat: 100.0, sph: 1.63, solved: 47}},
+    {agent: "David J", lead: "Kevin Flores", tier: "Tier 3", L30: {csat: 100.0, sph: 1.448, solved: 207}, W35: {csat: 100.0, sph: 1.65, solved: 60}, W36: {csat: 100.0, sph: 1.29, solved: 46}, W37: {csat: 100.0, sph: 1.13, solved: 41}, W38: {csat: 100.0, sph: 1.74, solved: 60}},
+    {agent: "Gabriela U.", lead: "Kevin Flores", tier: "Tier 3", L30: {csat: 95.7, sph: 1.456, solved: 222}, W35: {csat: 87.5, sph: 1.36, solved: 50}, W36: {csat: 100.0, sph: 1.26, solved: 44}, W37: {csat: 100.0, sph: 1.74, solved: 62}, W38: {csat: 100.0, sph: 1.34, solved: 66}},
+    {agent: "Jose M.", lead: "Kevin Flores", tier: "Tier 3", L30: {csat: 91.4, sph: 1.713, solved: 230}, W35: {csat: 88.9, sph: 1.82, solved: 62}, W36: {csat: 90.9, sph: 1.66, solved: 60}, W37: {csat: 100.0, sph: 1.55, solved: 51}, W38: {csat: 85.7, sph: 1.72, solved: 57}},
+    {agent: "Laura E.", lead: "Kevin Flores", tier: "Tier 2", L30: {csat: 100.0, sph: 1.389, solved: 215}, W35: {csat: 100.0, sph: 1.20, solved: 44}, W36: {csat: 100.0, sph: 1.12, solved: 41}, W37: {csat: 100.0, sph: 1.43, solved: 52}, W38: {csat: 100.0, sph: 1.89, solved: 78}},
+    {agent: "Madelein Escoto", lead: "Kevin Flores", tier: "Tier 2", L30: {csat: 86.4, sph: 1.436, solved: 217}, W35: {csat: 83.3, sph: 1.58, solved: 57}, W36: {csat: 100.0, sph: 1.20, solved: 43}, W37: {csat: 100.0, sph: 1.48, solved: 53}, W38: {csat: 85.7, sph: 1.73, solved: 64}},
+    {agent: "Roberto", lead: "Kevin Flores", tier: "Tier 3", L30: {csat: 92.3, sph: 1.550, solved: 225}, W35: {csat: 100.0, sph: 1.51, solved: 53}, W36: {csat: 100.0, sph: 1.51, solved: 58}, W37: {csat: 100.0, sph: 1.57, solved: 58}, W38: {csat: 80.0, sph: 1.41, solved: 56}},
+    {agent: "Saddua P", lead: "Kevin Flores", tier: "Tier 2", L30: {csat: 100.0, sph: 1.530, solved: 181}, W35: {csat: 100.0, sph: 1.42, solved: 42}, W36: {csat: 100.0, sph: 1.63, solved: 48}, W37: {csat: 100.0, sph: 1.39, solved: 41}, W38: {csat: 100.0, sph: 1.67, solved: 50}},
+    {agent: "Sergio Z", lead: "Kevin Flores", tier: "Tier 3", L30: {csat: 81.3, sph: 1.411, solved: 184}, W35: {csat: 100.0, sph: 1.07, solved: 38}, W36: {csat: 100.0, sph: 1.56, solved: 56}, W37: {csat: 50.0, sph: 1.46, solved: 52}, W38: {csat: 66.7, sph: 1.53, solved: 38}}
+  ],
+  streaks: {
+    csat: [
+      {agent: "Claudia", lead: "Adonay Medina", tier: "Tier 3", count: 2, weeks: "W38, W37"},
+      {agent: "Delmy Romero", lead: "Oscar Lagos", tier: "Tier 2", count: 2, weeks: "W38, W37"},
+      {agent: "Kelvin Aguirre", lead: "Mario Sibrian", tier: "Tier 2", count: 2, weeks: "W38, W37"},
+      {agent: "Sergio P", lead: "Oscar Lagos", tier: "Tier 3", count: 2, weeks: "W38, W37"},
+      {agent: "Sergio Z", lead: "Kevin Flores", tier: "Tier 3", count: 2, weeks: "W38, W37"}
+    ],
+    sph: [
+      {agent: "Alejandro Herrera", lead: "Adonay Medina", tier: "Tier 2", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Angie Espinoza", lead: "Mario Sibrian", tier: "Tier 2", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Claudia", lead: "Adonay Medina", tier: "Tier 3", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Edison", lead: "Mario Sibrian", tier: "Tier 3", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Jesie Rivera", lead: "Oscar Lagos", tier: "Tier 2", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Laura E.", lead: "Kevin Flores", tier: "Tier 2", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Leonardo", lead: "Mario Sibrian", tier: "Tier 3", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Madelein Escoto", lead: "Kevin Flores", tier: "Tier 2", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Mitch M.", lead: "Adonay Medina", tier: "Tier 2", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Saddua P", lead: "Kevin Flores", tier: "Tier 2", count: 4, weeks: "W38, W37, W36, W35"},
+      {agent: "Adriana", lead: "Mario Sibrian", tier: "Tier 3", count: 3, weeks: "W38, W37, W36"},
+      {agent: "Nicolle", lead: "Oscar Lagos", tier: "Tier 2", count: 3, weeks: "W38, W37, W36"}
+    ]
+  }
+};
+
+const agentMap = {};
+DATA.agents.forEach(a => agentMap[a.agent] = a);
+
+// Initialize Tab Toggle
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tier = btn.dataset.tier.replace(' ', '');
+    document.querySelectorAll('.tier-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + tier).classList.add('active');
+  });
+});
+
+// Render Charts
+function createLineChart(id, labels, data, goal, color) {
+  const ctx = document.getElementById(id).getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Promedio', data: data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: color },
+        { label: 'Meta', data: labels.map(() => goal), borderColor: 'rgba(232,236,247,0.35)', borderDash: [5,4], pointRadius: 0 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(148,163,196,0.08)' }, ticks: { color: '#5C6788' } },
+        y: { grid: { color: 'rgba(148,163,196,0.08)' }, ticks: { color: '#5C6788' } }
+      }
+    }
+  });
+}
+
+createLineChart('chart-csat-T2', DATA.trend.weeks, DATA.trend.t2.csat, 90.0, '#60A5FA');
+createLineChart('chart-sph-T2', DATA.trend.weeks, DATA.trend.t2.sph, 2.0, '#60A5FA');
+createLineChart('chart-csat-T3', DATA.trend.weeks, DATA.trend.t3.csat, 90.0, '#C084FC');
+createLineChart('chart-sph-T3', DATA.trend.weeks, DATA.trend.t3.sph, 1.5, '#C084FC');
+
+// Render Accordion Streaks
+function renderDropdownList(list, elementId) {
+  const container = document.getElementById(elementId);
+  container.innerHTML = list.map((item, idx) => {
+    const agObj = agentMap[item.agent] || {};
+    const uid = elementId + '-' + idx;
+    return `
+      <div class="streak-card">
+        <div class="streak-header" onclick="toggleDropdown('${uid}')">
+          <div class="streak-left">
+            <span>▼</span> <span>${item.agent}</span>
+            <span class="lead-tag">(${item.lead})</span>
+            <span class="tier-tag ${item.tier === 'Tier 2' ? 't2' : 't3'}">${item.tier}</span>
+          </div>
+          <div class="streak-count">${item.count} <span style="font-size:11px; font-weight:normal;">semanas</span></div>
+        </div>
+        <div class="streak-dropdown" id="${uid}">
+          <div class="weekly-grid">
+            ${['W35', 'W36', 'W37', 'W38'].map(wk => {
+              const metrics = agObj[wk] || {csat: 0, sph: 0};
+              const csatPass = metrics.csat >= 90.0;
+              const sphGoal = item.tier === 'Tier 2' ? 2.0 : 1.5;
+              const sphPass = metrics.sph >= sphGoal;
+              return `
+                <div class="week-box">
+                  <div class="w-lbl">${wk}</div>
+                  <div class="w-val ${csatPass ? 'val-pass' : 'val-fail'}">CSAT: ${metrics.csat}%</div>
+                  <div class="w-val ${sphPass ? 'val-pass' : 'val-fail'}">SPH: ${metrics.sph}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleDropdown(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+renderDropdownList(DATA.streaks.csat, 'csatDropdownList');
+renderDropdownList(DATA.streaks.sph, 'sphDropdownList');
+
+// Filter Execution Function
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const lead = document.getElementById('teamLeadSelect').value;
+  const period = document.getElementById('periodSelect').value;
+  const tier = document.getElementById('tierSelect').value;
+  const csat = document.getElementById('csatSelect').value;
+  const sph = document.getElementById('sphSelect').value;
+
+  let totalCount = 0, oopCount = 0, csatFailCount = 0, sphFailCount = 0;
+
+  const filtered = DATA.agents.filter(a => {
+    const periodData = a[period] || a.L30;
+    const sphGoal = a.tier === 'Tier 2' ? 2.0 : 1.5;
+    
+    const csatPass = periodData.csat >= 90.0;
+    const sphPass = periodData.sph >= sphGoal;
+
+    const matchesSearch = a.agent.toLowerCase().includes(search);
+    const matchesLead = (lead === 'ALL' || a.lead === lead);
+    const matchesTier = (tier === 'ALL' || a.tier === tier);
+    const matchesCSAT = (csat === 'ALL' || (csat === 'PASS' && csatPass) || (csat === 'FAIL' && !csatPass));
+    const matchesSPH = (sph === 'ALL' || (sph === 'PASS' && sphPass) || (sph === 'FAIL' && !sphPass));
+
+    return matchesSearch && matchesLead && matchesTier && matchesCSAT && matchesSPH;
+  });
+
+  // Calculate Metrics on Filtered Data
+  filtered.forEach(a => {
+    totalCount++;
+    const periodData = a[period] || a.L30;
+    const sphGoal = a.tier === 'Tier 2' ? 2.0 : 1.5;
+    const csatPass = periodData.csat >= 90.0;
+    const sphPass = periodData.sph >= sphGoal;
+
+    if (!csatPass) csatFailCount++;
+    if (!sphPass) sphFailCount++;
+    if (!csatPass || !sphPass) oopCount++;
+  });
+
+  // Update KPI Cards
+  document.getElementById('kpiTotal').textContent = totalCount;
+  document.getElementById('kpiOOP').textContent = oopCount;
+  document.getElementById('kpiCSAT').textContent = csatFailCount;
+  document.getElementById('kpiSPH').textContent = sphFailCount;
+
+  // Render Table
+  const tbody = document.getElementById('agentTableBody');
+  tbody.innerHTML = filtered.map(a => {
+    const periodData = a[period] || a.L30;
+    const sphGoal = a.tier === 'Tier 2' ? 2.0 : 1.5;
+    const csatPass = periodData.csat >= 90.0;
+    const sphPass = periodData.sph >= sphGoal;
+
+    return `
+      <tr>
+        <td><b>${a.agent}</b></td>
+        <td><span class="lead-tag">${a.lead}</span></td>
+        <td><span class="tier-tag ${a.tier === 'Tier 2' ? 't2' : 't3'}">${a.tier}</span></td>
+        <td>${periodData.csat.toFixed(1)}%</td>
+        <td>${csatPass ? '<span class="pill-hit">Cumple</span>' : '<span class="pill-miss">Bajo 90%</span>'}</td>
+        <td>${periodData.sph.toFixed(2)}</td>
+        <td>${sphPass ? '<span class="pill-hit">Cumple</span>' : `<span class="pill-miss">Bajo ${sphGoal.toFixed(2)}</span>`}</td>
+        <td>${periodData.solved}</td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('tableCountText').textContent = `${filtered.length} de ${DATA.agents.length} agentes mostrados`;
+}
+
+// Clear Filters Event
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('teamLeadSelect').value = 'ALL';
+  document.getElementById('periodSelect').value = 'L30';
+  document.getElementById('tierSelect').value = 'ALL';
+  document.getElementById('csatSelect').value = 'ALL';
+  document.getElementById('sphSelect').value = 'ALL';
+  applyFilters();
+});
+
+// Event Listeners for Live Filtering
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('teamLeadSelect').addEventListener('change', applyFilters);
+document.getElementById('periodSelect').addEventListener('change', applyFilters);
+document.getElementById('tierSelect').addEventListener('change', applyFilters);
+document.getElementById('csatSelect').addEventListener('change', applyFilters);
+document.getElementById('sphSelect').addEventListener('change', applyFilters);
+
+// Initial Execution
+applyFilters();
+</script>
+</body>
+</html>
